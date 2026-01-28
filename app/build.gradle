@@ -14,6 +14,11 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Expose TfL API credentials via BuildConfig.
+        // Values are loaded from local, untracked properties files so keys are never committed.
+        buildConfigField "String", "TFL_APP_ID", "\"${tflAppId}\""
+        buildConfigField "String", "TFL_APP_KEY", "\"${tflAppKey}\""
     }
 
     buildTypes {
@@ -28,6 +33,35 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// Load TfL API keys from local configuration files.
+// This keeps secrets out of version control but still convenient for development.
+def tflAppId = ""
+def tflAppKey = ""
+
+def localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    def localProps = new Properties()
+    localProps.load(new FileInputStream(localPropsFile))
+    if (localProps.getProperty("TFL_APP_ID") != null) {
+        tflAppId = localProps.getProperty("TFL_APP_ID")
+    }
+    if (localProps.getProperty("TFL_APP_KEY") != null) {
+        tflAppKey = localProps.getProperty("TFL_APP_KEY")
+    }
+}
+
+def secretsPropsFile = rootProject.file("secrets.properties")
+if (secretsPropsFile.exists()) {
+    def secretsProps = new Properties()
+    secretsProps.load(new FileInputStream(secretsPropsFile))
+    if (secretsProps.getProperty("TFL_APP_ID") != null) {
+        tflAppId = secretsProps.getProperty("TFL_APP_ID")
+    }
+    if (secretsProps.getProperty("TFL_APP_KEY") != null) {
+        tflAppKey = secretsProps.getProperty("TFL_APP_KEY")
     }
 }
 
