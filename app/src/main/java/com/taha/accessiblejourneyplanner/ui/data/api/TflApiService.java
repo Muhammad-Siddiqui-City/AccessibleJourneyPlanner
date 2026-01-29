@@ -16,4 +16,13 @@ public interface TflApiService {
             @Query("app_id") String appId,
             @Query("app_key") String appKey
     );
+
+    // Line disruptions/status – read-only; we only fetch and display.
+    // GET https://api.tfl.gov.uk/Line/{id}/Status returns an array of line objects (one when single id).
+    @GET("Line/{id}/Status")
+    Call<List<TflLineStatusDto>> getLineStatus(
+            @Path("id") String lineId,
+            @Query("app_id") String appId,
+            @Query("app_key") String appKey
+    );
 }
