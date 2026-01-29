@@ -12,10 +12,16 @@ import com.taha.accessiblejourneyplanner.ui.data.api.RetrofitClient;
 import com.taha.accessiblejourneyplanner.ui.data.api.TflApiService;
 import com.taha.accessiblejourneyplanner.ui.data.api.TflArrivalDto;
 import com.taha.accessiblejourneyplanner.ui.data.api.TflLineStatusDto;
+import com.taha.accessiblejourneyplanner.ui.data.db.AppDatabase;
+import com.taha.accessiblejourneyplanner.ui.data.db.ArrivalDao;
+import com.taha.accessiblejourneyplanner.ui.data.db.CachedArrivalEntity;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -32,6 +38,10 @@ public class LiveArrivalsActivity extends AppCompatActivity {
     // Hardcoded line for Phase 3 disruptions (read-only; we only fetch and display status).
     private static final String LINE_ID_DISRUPTIONS = "victoria";
 
+    private AppDatabase db;
+    private ArrivalDao dao;
+    private final Executor dbExecutor = Executors.newSingleThreadExecutor();
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -41,6 +51,9 @@ public class LiveArrivalsActivity extends AppCompatActivity {
         tv.setPadding(32, 32, 32, 32);
         tv.setText("Live Arrivals (Phase 2)\nCalling TfL API…\nCheck Logcat: " + TAG);
         setContentView(tv);
+
+        db = AppDatabase.getInstance(this);
+        dao = db.arrivalDao();
 
         String appId = BuildConfig.TFL_APP_ID;
         String appKey = BuildConfig.TFL_APP_KEY;
@@ -59,7 +72,7 @@ public class LiveArrivalsActivity extends AppCompatActivity {
             public void onResponse(Call<List<TflArrivalDto>> call, Response<List<TflArrivalDto>> response) {
                 if (!response.isSuccessful()) {
                     Log.e(TAG, "HTTP error: " + response.code() + " " + response.message());
-                    tv.setText("HTTP error: " + response.code() + "\nCheck Logcat: " + TAG);
+                    tryCacheThenShowError(tv, "HTTP error: " + response.code() + "\nCheck Logcat: " + TAG);
                     return;
                 }
 
@@ -96,6 +109,25 @@ public class LiveArrivalsActivity extends AppCompatActivity {
 
                 tv.setText(sb.toString());
 
+                // Write-through cache: save arrivals so we can show them when offline.
+                long fetchedAt = System.currentTimeMillis();
+                final List<CachedArrivalEntity> entities = new ArrayList<>();
+                for (TflArrivalDto a : arrivals) {
+                    entities.add(new CachedArrivalEntity(
+                            STOP_POINT_ID,
+                            a.lineName,
+                            a.towards,
+                            a.platformName,
+                            a.timeToStation,
+                            fetchedAt
+                    ));
+                }
+                dbExecutor.execute(() -> {
+                    dao.deleteByStopPoint(STOP_POINT_ID);
+                    dao.insertAll(entities);
+                    Log.d(TAG, "Saved " + entities.size() + " arrivals to cache");
+                });
+
                 // Disruptions are read-only; we only fetch and display status (no actions taken).
                 fetchDisruptionsAndAppendToUi(api, appId, appKey, tv);
             }
@@ -103,9 +135,48 @@ public class LiveArrivalsActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call<List<TflArrivalDto>> call, Throwable t) {
                 Log.e(TAG, "Network/API failure: " + t.getMessage(), t);
-                tv.setText("Network/API failure.\nCheck Logcat: " + TAG + "\n\n" + t.getMessage());
+                tryCacheThenShowError(tv, "Network/API failure.\nCheck Logcat: " + TAG + "\n\n" + t.getMessage());
             }
         });
+    }
+
+    /**
+     * On failure, try to load cached arrivals from Room (off main thread), then update UI on main thread.
+     * If cache is empty, show the given error message. Do not call disruptions when showing cache.
+     */
+    private void tryCacheThenShowError(final TextView tv, final String errorMessage) {
+        dbExecutor.execute(() -> {
+            final List<CachedArrivalEntity> cached = dao.getByStopPoint(STOP_POINT_ID);
+            runOnUiThread(() -> showCachedOrError(tv, cached, errorMessage));
+        });
+    }
+
+    /**
+     * If cache has data: log "Offline – using cached data", "Loaded X cached arrivals", log top 10 with [CACHED] prefix,
+     * set TextView to "Offline – showing cached arrivals". Otherwise set TextView to errorMessage.
+     */
+    private void showCachedOrError(TextView tv, List<CachedArrivalEntity> cached, String errorMessage) {
+        if (cached == null || cached.isEmpty()) {
+            tv.setText(errorMessage);
+            return;
+        }
+        Log.d(TAG, "Offline – using cached data");
+        Log.d(TAG, "Loaded " + cached.size() + " cached arrivals");
+        int limit = Math.min(cached.size(), 10);
+        for (int i = 0; i < limit; i++) {
+            CachedArrivalEntity a = cached.get(i);
+            String line = safe(a.lineName);
+            String towards = safe(a.towards);
+            String platform = safe(a.platformName);
+            int mins = Math.max(0, a.timeToStation / 60);
+            String crowding = inferCrowdingFromTimeToStation(a.timeToStation);
+            Log.i(TAG, "[CACHED] " + (i + 1) + ") " + line +
+                    " → " + towards +
+                    " | " + mins + " min" +
+                    (platform.isEmpty() ? "" : " | " + platform) +
+                    " | " + crowding);
+        }
+        tv.setText("Offline – showing cached arrivals\nStopPoint: " + STOP_POINT_ID);
     }
 
     private static String safe(String s) {
