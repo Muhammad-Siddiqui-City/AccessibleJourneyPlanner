@@ -4,7 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:fitsSystemWindows="true">
+    android:fitsSystemWindows="true"
+    android:background="@color/surface_light">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar_live_arrivals"
@@ -25,13 +26,13 @@
             android:visibility="gone"
             android:contentDescription="Offline: showing cached data" />
 
-        <!-- Accessibility summary for the stop -->
+        <!-- Status card: station name, line status, step-free, lift. All shown on screen. -->
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/card_accessibility"
+            android:id="@+id/card_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
-            app:cardCornerRadius="8dp"
+            app:cardCornerRadius="12dp"
             app:cardElevation="4dp">
 
             <LinearLayout
@@ -41,30 +42,36 @@
                 android:padding="16dp">
 
                 <TextView
+                    android:id="@+id/text_station_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="?attr/textAppearanceSubtitle1"
+                    android:textStyle="bold"
+                    android:contentDescription="Station name" />
+
+                <TextView
+                    android:id="@+id/text_line_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textAppearance="?attr/textAppearanceBody1"
+                    android:contentDescription="Line service status" />
+
+                <TextView
                     android:id="@+id/text_step_free"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Step-free: Unknown"
-                    android:textAppearance="?attr/textAppearanceBody1"
-                    android:contentDescription="Step-free access status for this stop" />
+                    android:layout_marginTop="4dp"
+                    android:textAppearance="?attr/textAppearanceBody2"
+                    android:contentDescription="Step-free access status" />
 
                 <TextView
                     android:id="@+id/text_lift_disruption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Lift disruption: Unknown"
-                    android:textAppearance="?attr/textAppearanceBody1"
-                    android:contentDescription="Lift disruption status for this stop" />
-
-                <!-- Phase 3: line status (e.g. Victoria) – read-only, log + summary -->
-                <TextView
-                    android:id="@+id/text_line_status"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
                     android:textAppearance="?attr/textAppearanceBody2"
-                    android:contentDescription="Line disruptions status, see Logcat for details" />
+                    android:contentDescription="Lift disruption status" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

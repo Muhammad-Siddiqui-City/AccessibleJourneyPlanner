@@ -9,7 +9,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
 import com.taha.accessiblejourneyplanner.R;
-import com.taha.accessiblejourneyplanner.ui.livearrivals.LiveArrivalsActivity;
+import com.taha.accessiblejourneyplanner.ui.stopsearch.StopSearchActivity;
 import com.taha.accessiblejourneyplanner.ui.planjourney.PlanJourneyActivity;
 
 /**
@@ -36,7 +36,8 @@ public class HomeActivity extends AppCompatActivity {
         liveArrivalsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent(HomeActivity.this, LiveArrivalsActivity.class);
+                Intent intent = new Intent(HomeActivity.this, StopSearchActivity.class);
+                intent.putExtra(StopSearchActivity.EXTRA_MODE, StopSearchActivity.MODE_ARRIVALS);
                 startActivity(intent);
             }
         });

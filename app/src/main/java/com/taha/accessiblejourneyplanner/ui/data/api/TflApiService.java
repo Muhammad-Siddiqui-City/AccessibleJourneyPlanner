@@ -42,7 +42,15 @@ public interface TflApiService {
             @Query("app_key") String appKey
     );
 
-    // Journey planner: from/to can be NaPTAN stop IDs or lat,lon.
+    // StopPoint search: user types station/stop name. Do not filter modes so buses etc. are included.
+    @GET("StopPoint/Search")
+    Call<TflStopPointSearchDto> searchStopPoints(
+            @Query("query") String query,
+            @Query("app_id") String appId,
+            @Query("app_key") String appKey
+    );
+
+    // Journey planner: from/to can be NaPTAN stop IDs or lat,lon. Buses included by default; we do not filter modes.
     @GET("Journey/JourneyResults/{from}/to/{to}")
     Call<TflJourneyDto.ItineraryResult> getJourneyResults(
             @Path("from") String fromId,

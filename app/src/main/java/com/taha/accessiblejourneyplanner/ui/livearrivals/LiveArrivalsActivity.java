@@ -1,5 +1,6 @@
 package com.taha.accessiblejourneyplanner.ui.livearrivals;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -24,6 +25,7 @@ import com.taha.accessiblejourneyplanner.ui.data.api.TflStopPointDto;
 import com.taha.accessiblejourneyplanner.ui.data.db.AppDatabase;
 import com.taha.accessiblejourneyplanner.ui.data.db.ArrivalDao;
 import com.taha.accessiblejourneyplanner.ui.data.db.CachedArrivalEntity;
+import com.taha.accessiblejourneyplanner.ui.stopsearch.StopSearchActivity;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,18 +41,23 @@ import retrofit2.Response;
 
 public class LiveArrivalsActivity extends AppCompatActivity {
 
+    public static final String EXTRA_STOP_ID = "stop_id";
+    public static final String EXTRA_STOP_NAME = "stop_name";
     private static final String TAG = "LiveArrivals";
-    private static final String STOP_POINT_ID = "940GZZLUKSX";
+    /** Fallback line for disruption status when we do not infer from arrivals. */
     private static final String LINE_ID_DISRUPTIONS = "victoria";
 
+    private String stopPointId;
+    private String stationName;
     private AppDatabase db;
     private ArrivalDao dao;
     private final Executor dbExecutor = Executors.newSingleThreadExecutor();
 
+    private TextView textStationName;
     private TextView textOfflineBanner;
+    private TextView textLineStatus;
     private TextView textStepFree;
     private TextView textLiftDisruption;
-    private TextView textLineStatus;
     private ProgressBar progressBar;
     private TextView textErrorOrEmpty;
     private SwipeRefreshLayout swipeRefresh;
@@ -81,15 +88,32 @@ public class LiveArrivalsActivity extends AppCompatActivity {
 
         api = RetrofitClient.getService();
 
+        stopPointId = getIntent().getStringExtra(EXTRA_STOP_ID);
+        stationName = getIntent().getStringExtra(EXTRA_STOP_NAME);
+        if (stationName == null) stationName = "";
+        if (stopPointId == null || stopPointId.trim().isEmpty()) {
+            Intent i = new Intent(this, StopSearchActivity.class);
+            i.putExtra(StopSearchActivity.EXTRA_MODE, StopSearchActivity.MODE_ARRIVALS);
+            startActivity(i);
+            finish();
+            return;
+        }
+
+        textStationName = findViewById(R.id.text_station_name);
         textOfflineBanner = findViewById(R.id.text_offline_banner);
+        textLineStatus = findViewById(R.id.text_line_status);
         textStepFree = findViewById(R.id.text_step_free);
         textLiftDisruption = findViewById(R.id.text_lift_disruption);
-        textLineStatus = findViewById(R.id.text_line_status);
         progressBar = findViewById(R.id.progress_live_arrivals);
         textErrorOrEmpty = findViewById(R.id.text_error_or_empty);
         swipeRefresh = findViewById(R.id.swipe_refresh_live_arrivals);
         recycler = findViewById(R.id.recycler_live_arrivals);
         textLastUpdated = findViewById(R.id.text_last_updated);
+
+        textStationName.setText(stationName.isEmpty() ? "Station" : stationName);
+        textStepFree.setText("Step-free: Not available");
+        textLiftDisruption.setText("Lift disruption: Not available");
+        textLineStatus.setText("Line status: Loading…");
 
         adapter = new ArrivalsAdapter();
         recycler.setLayoutManager(new LinearLayoutManager(this));
@@ -106,7 +130,7 @@ public class LiveArrivalsActivity extends AppCompatActivity {
         progressBar.setVisibility(View.VISIBLE);
         recycler.setVisibility(View.VISIBLE);
 
-        api.getArrivals(STOP_POINT_ID, appId, appKey).enqueue(new Callback<List<TflArrivalDto>>() {
+        api.getArrivals(stopPointId, appId, appKey).enqueue(new Callback<List<TflArrivalDto>>() {
             @Override
             public void onResponse(Call<List<TflArrivalDto>> call, Response<List<TflArrivalDto>> response) {
                 swipeRefresh.setRefreshing(false);
@@ -125,11 +149,11 @@ public class LiveArrivalsActivity extends AppCompatActivity {
                 long fetchedAt = System.currentTimeMillis();
                 List<CachedArrivalEntity> entities = new ArrayList<>();
                 for (TflArrivalDto a : arrivals) {
-                    entities.add(new CachedArrivalEntity(STOP_POINT_ID, a.lineName, a.towards,
+                    entities.add(new CachedArrivalEntity(stopPointId, a.lineName, a.towards,
                             a.platformName, a.timeToStation, fetchedAt));
                 }
                 dbExecutor.execute(() -> {
-                    dao.deleteByStopPoint(STOP_POINT_ID);
+                    dao.deleteByStopPoint(stopPointId);
                     dao.insertAll(entities);
                     Log.d(TAG, "Saved " + entities.size() + " arrivals to cache");
                 });
@@ -147,7 +171,6 @@ public class LiveArrivalsActivity extends AppCompatActivity {
                 recycler.setVisibility(View.VISIBLE);
 
                 fetchAccessibilityAndDisruptions();
-                // Phase 3: line status (Victoria) – read-only; log and show "Disruptions checked – see Logcat"
                 fetchLineStatusAndUpdateUi();
             }
 
@@ -163,19 +186,17 @@ public class LiveArrivalsActivity extends AppCompatActivity {
 
     private void tryCacheThenShowError(String errorMessage) {
         dbExecutor.execute(() -> {
-            List<CachedArrivalEntity> cached = dao.getByStopPoint(STOP_POINT_ID);
+            List<CachedArrivalEntity> cached = dao.getByStopPoint(stopPointId);
             runOnUiThread(() -> {
                 if (cached != null && !cached.isEmpty()) {
-                    Log.d(TAG, "Offline – using cached data");
-                    Log.d(TAG, "Loaded " + cached.size() + " cached arrivals");
                     textOfflineBanner.setVisibility(View.VISIBLE);
-                    textOfflineBanner.setText("Offline – showing cached arrivals");
+                    long fetchedAt = cached.get(0).fetchedAt;
+//                    long fetchedAt = cached.get(0).fetchedAt;
+                    textOfflineBanner.setText("Offline — showing cached arrivals (last updated " + formatTime(fetchedAt) + ")");
                     int limit = Math.min(cached.size(), 10);
                     List<ArrivalItem> items = new ArrayList<>();
-                    long fetchedAt = 0;
                     for (int i = 0; i < limit; i++) {
                         CachedArrivalEntity a = cached.get(i);
-                        fetchedAt = a.fetchedAt;
                         String crowding = inferCrowdingFromTimeToStation(a.timeToStation);
                         items.add(new ArrivalItem(a.lineName, a.towards, a.platformName, Math.max(0, a.timeToStation / 60), crowding));
                     }
@@ -184,8 +205,9 @@ public class LiveArrivalsActivity extends AppCompatActivity {
                     recycler.setVisibility(View.VISIBLE);
                     textErrorOrEmpty.setVisibility(View.GONE);
                     fetchAccessibilityAndDisruptions();
+                    fetchLineStatusAndUpdateUi();
                 } else {
-                    textErrorOrEmpty.setText(errorMessage);
+                    textErrorOrEmpty.setText("Could not load arrivals. " + errorMessage + " Pull to refresh or select another station.");
                     textErrorOrEmpty.setVisibility(View.VISIBLE);
                     recycler.setVisibility(View.GONE);
                     adapter.setItems(null);
@@ -195,54 +217,49 @@ public class LiveArrivalsActivity extends AppCompatActivity {
     }
 
     private void fetchAccessibilityAndDisruptions() {
-        textStepFree.setText("Step-free: Unknown");
-        textLiftDisruption.setText("Lift disruption: Unknown");
-
-        api.getStopPoint(STOP_POINT_ID, appId, appKey).enqueue(new Callback<List<TflStopPointDto>>() {
+        api.getStopPoint(stopPointId, appId, appKey).enqueue(new Callback<List<TflStopPointDto>>() {
             @Override
             public void onResponse(Call<List<TflStopPointDto>> call, Response<List<TflStopPointDto>> response) {
                 if (response.isSuccessful() && response.body() != null && !response.body().isEmpty()) {
                     TflStopPointDto dto = response.body().get(0);
                     String stepFree = parseStepFree(dto);
-                    textStepFree.setText("Step-free: " + stepFree);
+                    textStepFree.setText("Step-free: " + ("Unknown".equals(stepFree) ? "Not available" : stepFree));
+                } else {
+                    textStepFree.setText("Step-free: Not available");
                 }
             }
 
             @Override
             public void onFailure(Call<List<TflStopPointDto>> call, Throwable t) {
-                Log.w(TAG, "StopPoint details failed: " + t.getMessage());
+                textStepFree.setText("Step-free: Not available");
             }
         });
 
-        api.getStopPointDisruptions(STOP_POINT_ID, appId, appKey).enqueue(new Callback<List<TflDisruptionDto>>() {
+        api.getStopPointDisruptions(stopPointId, appId, appKey).enqueue(new Callback<List<TflDisruptionDto>>() {
             @Override
             public void onResponse(Call<List<TflDisruptionDto>> call, Response<List<TflDisruptionDto>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     boolean liftIssues = hasLiftDisruption(response.body());
                     textLiftDisruption.setText("Lift disruption: " + (liftIssues ? "Yes" : "No"));
+                } else {
+                    textLiftDisruption.setText("Lift disruption: Not available");
                 }
             }
 
             @Override
             public void onFailure(Call<List<TflDisruptionDto>> call, Throwable t) {
-                Log.w(TAG, "StopPoint disruptions failed: " + t.getMessage());
+                textLiftDisruption.setText("Lift disruption: Not available");
             }
         });
     }
 
-    /**
-     * Phase 3: fetch line status (e.g. Victoria) for disruptions. Read-only; log line name, status, reason;
-     * update TextView with "Disruptions checked – see Logcat". Not called when showing cached arrivals.
-     */
+    /** Fetch line status and show on screen (e.g. Victoria: Good Service). No Logcat-only messaging. */
     private void fetchLineStatusAndUpdateUi() {
-        textLineStatus.setText("");
-        Log.d(TAG, "Requesting line status for: " + LINE_ID_DISRUPTIONS);
         api.getLineStatus(LINE_ID_DISRUPTIONS, appId, appKey).enqueue(new Callback<List<TflLineStatusDto>>() {
             @Override
             public void onResponse(Call<List<TflLineStatusDto>> call, Response<List<TflLineStatusDto>> response) {
                 if (!response.isSuccessful()) {
-                    Log.e(TAG, "Line status HTTP error: " + response.code());
-                    textLineStatus.setText("Disruptions: check Logcat");
+                    textLineStatus.setText("Line status: Not available");
                     return;
                 }
                 List<TflLineStatusDto> list = response.body();
@@ -255,18 +272,18 @@ public class LiveArrivalsActivity extends AppCompatActivity {
                         TflLineStatusDto.LineStatusEntry first = dto.lineStatuses.get(0);
                         status = safe(first.statusSeverityDescription);
                         if (first.reason != null && !first.reason.trim().isEmpty()) {
-                            reason = " | " + safe(first.reason);
+                            reason = " — " + safe(first.reason);
                         }
-                        Log.i(TAG, "Disruption – Line: " + lineName + " | Status: " + status + reason);
                     }
+                    textLineStatus.setText(lineName + ": " + status + reason);
+                } else {
+                    textLineStatus.setText("Line status: Not available");
                 }
-                textLineStatus.setText("Disruptions checked – see Logcat");
             }
 
             @Override
             public void onFailure(Call<List<TflLineStatusDto>> call, Throwable t) {
-                Log.e(TAG, "Line status network failure: " + t.getMessage(), t);
-                textLineStatus.setText("Disruptions: check Logcat");
+                textLineStatus.setText("Line status: Not available");
             }
         });
     }
@@ -315,8 +332,8 @@ public class LiveArrivalsActivity extends AppCompatActivity {
 
     private static String inferCrowdingFromTimeToStation(int timeToStationSeconds) {
         int mins = Math.max(0, timeToStationSeconds / 60);
-        if (mins < 2) return "High crowding";
-        if (mins <= 5) return "Medium crowding";
-        return "Low crowding";
+        if (mins < 2) return "High";
+        if (mins <= 5) return "Medium";
+        return "Low";
     }
 }

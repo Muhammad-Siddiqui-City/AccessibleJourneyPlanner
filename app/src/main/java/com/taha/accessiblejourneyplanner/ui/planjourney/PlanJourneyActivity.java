@@ -8,7 +8,8 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -22,6 +23,7 @@ import com.taha.accessiblejourneyplanner.ui.data.db.AppDatabase;
 import com.taha.accessiblejourneyplanner.util.JourneyScorer;
 import com.taha.accessiblejourneyplanner.util.StopPointCacheHelper;
 import com.taha.accessiblejourneyplanner.util.TtsManager;
+import com.taha.accessiblejourneyplanner.ui.stopsearch.StopSearchActivity;
 
 import androidx.appcompat.widget.SwitchCompat;
 
@@ -39,6 +41,8 @@ import retrofit2.Response;
 public class PlanJourneyActivity extends AppCompatActivity {
 
     private static final String TAG = "PlanJourney";
+    private static final int REQ_FROM = 1001;
+    private static final int REQ_TO = 1002;
     private static final String EXTRA_LEGS = "legs";
     private static final String EXTRA_DURATION = "duration";
 
@@ -99,55 +103,44 @@ public class PlanJourneyActivity extends AppCompatActivity {
         recycler.setLayoutManager(new LinearLayoutManager(this));
         recycler.setAdapter(adapter);
 
-        findViewById(R.id.row_from).setOnClickListener(v -> showFromDialog());
-        findViewById(R.id.row_to).setOnClickListener(v -> showToDialog());
         buttonSearch.setOnClickListener(v -> searchRoutes());
 
         adapter.setOnJourneyClickListener((item, position) -> {
             if (ttsManager != null) ttsManager.speakRouteSummary(position, item.durationMinutes, item.stepFreeBadge, item.liftBadge);
             openJourneyDetail(item);
         });
+
+        ActivityResultLauncher<Intent> fromLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() != RESULT_OK || result.getData() == null) return;
+                    fromId = result.getData().getStringExtra(StopSearchActivity.EXTRA_STOP_ID);
+                    fromName = result.getData().getStringExtra(StopSearchActivity.EXTRA_STOP_NAME);
+                    if (fromName != null) textFromStation.setText(fromName);
+                    if (ttsManager != null && fromName != null) ttsManager.speakStationName(fromName);
+                });
+        ActivityResultLauncher<Intent> toLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() != RESULT_OK || result.getData() == null) return;
+                    toId = result.getData().getStringExtra(StopSearchActivity.EXTRA_STOP_ID);
+                    toName = result.getData().getStringExtra(StopSearchActivity.EXTRA_STOP_NAME);
+                    if (toName != null) textToStation.setText(toName);
+                    if (ttsManager != null && toName != null) ttsManager.speakStationName(toName);
+                });
+
+        findViewById(R.id.row_from).setOnClickListener(v -> {
+            Intent i = new Intent(this, StopSearchActivity.class);
+            i.putExtra(StopSearchActivity.EXTRA_MODE, StopSearchActivity.MODE_JOURNEY_FROM);
+            fromLauncher.launch(i);
+        });
+        findViewById(R.id.row_to).setOnClickListener(v -> {
+            Intent i = new Intent(this, StopSearchActivity.class);
+            i.putExtra(StopSearchActivity.EXTRA_MODE, StopSearchActivity.MODE_JOURNEY_TO);
+            toLauncher.launch(i);
+        });
     }
 
-    private void showFromDialog() {
-        List<StationList.Station> stations = StationList.getStations();
-        String[] names = new String[stations.size()];
-        for (int i = 0; i < stations.size(); i++) {
-            names[i] = stations.get(i).displayName;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Choose From")
-                .setSingleChoiceItems(names, -1, (dialog, which) -> {
-                    StationList.Station s = stations.get(which);
-                    fromId = s.naptanId;
-                    fromName = s.displayName;
-                    textFromStation.setText(fromName);
-                    if (ttsManager != null) ttsManager.speakStationName(fromName);
-                    dialog.dismiss();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void showToDialog() {
-        List<StationList.Station> stations = StationList.getStations();
-        String[] names = new String[stations.size()];
-        for (int i = 0; i < stations.size(); i++) {
-            names[i] = stations.get(i).displayName;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Choose To")
-                .setSingleChoiceItems(names, -1, (dialog, which) -> {
-                    StationList.Station s = stations.get(which);
-                    toId = s.naptanId;
-                    toName = s.displayName;
-                    textToStation.setText(toName);
-                    if (ttsManager != null) ttsManager.speakStationName(toName);
-                    dialog.dismiss();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
 
     private void searchRoutes() {
         if (fromId == null || toId == null) {
@@ -216,11 +209,13 @@ public class PlanJourneyActivity extends AppCompatActivity {
                     for (int i = 0; i < scored.size(); i++) {
                         ScoredJourney s = scored.get(i);
                         String rankReason = JourneyScorer.rankReason(s.stepFreeFriendly, s.liftIssues, i);
+                        boolean busIncluded = hasBusLeg(s.j);
                         items.add(new JourneyResultItem(
                                 s.j.duration,
                                 buildModesSummary(s.j),
                                 s.stepFreeBadge,
                                 s.liftBadge,
+                                busIncluded,
                                 rankReason,
                                 s.j
                         ));
@@ -241,6 +236,14 @@ public class PlanJourneyActivity extends AppCompatActivity {
                 textErrorOrEmpty.setVisibility(View.VISIBLE);
             }
         });
+    }
+
+    private static boolean hasBusLeg(TflJourneyDto.Journey j) {
+        if (j == null || j.legs == null) return false;
+        for (TflJourneyDto.Leg leg : j.legs) {
+            if (leg.mode != null && "bus".equalsIgnoreCase(leg.mode.name)) return true;
+        }
+        return false;
     }
 
     private static String buildModesSummary(TflJourneyDto.Journey j) {

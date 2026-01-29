@@ -21,7 +21,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Placeholder screens for later phases. -->
+        <activity
+            android:name=".ui.stopsearch.StopSearchActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <activity
             android:name=".ui.livearrivals.LiveArrivalsActivity"
             android:exported="false" />

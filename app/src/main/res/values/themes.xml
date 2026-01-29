@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.AccessibleJourneyPlanner" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+    <!-- Material 3 style: rounded surfaces, clear hierarchy. -->
+    <style name="Theme.AccessibleJourneyPlanner" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/teal_700</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSurface">@color/white</item>
+    </style>
 </resources>
