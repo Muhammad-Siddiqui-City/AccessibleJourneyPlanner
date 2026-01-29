@@ -30,6 +30,11 @@
             android:name=".ui.planjourney.PlanJourneyActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.planjourney.JourneyDetailActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.planjourney.PlanJourneyActivity" />
+
     </application>
 
 

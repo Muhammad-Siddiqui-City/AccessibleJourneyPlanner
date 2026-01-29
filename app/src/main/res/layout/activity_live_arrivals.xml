@@ -1,21 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp">
+    android:orientation="vertical"
+    android:fitsSystemWindows="true">
 
-    <!-- Phase 1 placeholder. Real content will arrive in Phase 2+. -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar_live_arrivals"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:title="Live Arrivals"
+        app:titleTextColor="@color/white" />
 
-    <TextView
-        android:id="@+id/text_live_arrivals_placeholder"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Live Arrivals\n\nTODO Phase 2+: show real‑time departures from TfL, with step‑free options and disruption filtering."
-        android:textAppearance="?attr/textAppearanceBody1"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        <!-- Offline / cached indicator -->
+        <TextView
+            android:id="@+id/text_offline_banner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/teal_700"
+            android:padding="8dp"
+            android:textColor="@color/white"
+            android:visibility="gone"
+            android:contentDescription="Offline: showing cached data" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <!-- Accessibility summary for the stop -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_accessibility"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="4dp">
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/text_step_free"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Step-free: Unknown"
+                    android:textAppearance="?attr/textAppearanceBody1"
+                    android:contentDescription="Step-free access status for this stop" />
+
+                <TextView
+                    android:id="@+id/text_lift_disruption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Lift disruption: Unknown"
+                    android:textAppearance="?attr/textAppearanceBody1"
+                    android:contentDescription="Lift disruption status for this stop" />
+
+                <!-- Phase 3: line status (e.g. Victoria) – read-only, log + summary -->
+                <TextView
+                    android:id="@+id/text_line_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textAppearance="?attr/textAppearanceBody2"
+                    android:contentDescription="Line disruptions status, see Logcat for details" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Loading -->
+        <ProgressBar
+            android:id="@+id/progress_live_arrivals"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            android:contentDescription="Loading arrivals" />
+
+        <!-- Error / empty message -->
+        <TextView
+            android:id="@+id/text_error_or_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:visibility="gone"
+            android:textAppearance="?attr/textAppearanceBody1"
+            android:contentDescription="Error or empty message" />
+
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh_live_arrivals"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_live_arrivals"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:padding="8dp"
+                android:contentDescription="List of live arrivals" />
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+        <!-- Last updated -->
+        <TextView
+            android:id="@+id/text_last_updated"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="8dp"
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:contentDescription="Last updated time" />
+</LinearLayout>

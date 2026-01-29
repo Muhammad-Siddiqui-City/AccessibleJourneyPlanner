@@ -25,4 +25,29 @@ public interface TflApiService {
             @Query("app_id") String appId,
             @Query("app_key") String appKey
     );
+
+    // StopPoint details for accessibility (step-free, etc.). API returns array even for single id.
+    @GET("StopPoint/{id}")
+    Call<List<TflStopPointDto>> getStopPoint(
+            @Path("id") String stopPointId,
+            @Query("app_id") String appId,
+            @Query("app_key") String appKey
+    );
+
+    // StopPoint disruptions (e.g. lift out of service).
+    @GET("StopPoint/{id}/Disruption")
+    Call<List<TflDisruptionDto>> getStopPointDisruptions(
+            @Path("id") String stopPointId,
+            @Query("app_id") String appId,
+            @Query("app_key") String appKey
+    );
+
+    // Journey planner: from/to can be NaPTAN stop IDs or lat,lon.
+    @GET("Journey/JourneyResults/{from}/to/{to}")
+    Call<TflJourneyDto.ItineraryResult> getJourneyResults(
+            @Path("from") String fromId,
+            @Path("to") String toId,
+            @Query("app_id") String appId,
+            @Query("app_key") String appKey
+    );
 }

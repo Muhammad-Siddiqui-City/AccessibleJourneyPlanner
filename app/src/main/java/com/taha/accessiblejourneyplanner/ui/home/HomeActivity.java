@@ -6,6 +6,7 @@ import android.view.View;
 import android.widget.Button;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 import com.taha.accessiblejourneyplanner.R;
 import com.taha.accessiblejourneyplanner.ui.livearrivals.LiveArrivalsActivity;
@@ -22,7 +23,11 @@ public class HomeActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
 
-        setTitle("Accessible Journey Planner");
+        Toolbar toolbar = findViewById(R.id.toolbar_home);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setTitle("Accessible Journey Planner");
+        }
 
         Button liveArrivalsButton = findViewById(R.id.button_live_arrivals);
         Button planJourneyButton = findViewById(R.id.button_plan_journey);
